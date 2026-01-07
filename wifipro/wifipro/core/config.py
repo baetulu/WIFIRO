@@ -72,7 +72,7 @@ class Menu:
             f"{colors.DG}──────────────────────────{colors.NC}",
             f"{colors.W}Version  : {colors.G}{self.version}{colors.NC}",
             f"{colors.W}Engine   : {colors.C}Aircrack-ng Suite{colors.NC}",
-            f"{colors.W}Author   : {colors.P}Kali-User{colors.NC}",
+            f"{colors.W}Author   : {colors.P}kang-nom{colors.NC}",
             f"{colors.W}Codename : {colors.Y}Phantom-Scanner{colors.NC}",
             f"{colors.DG}──────────────────────────{colors.NC}"
         ]
