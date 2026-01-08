@@ -7,7 +7,7 @@ from wifipro.utils.renderer import format_target_table
 class Menu:
     def __init__(self):
         self.colors = colors 
-        self.version = "2.0"
+        self.version = "3.0"
         self.wifi = None
         self.targets = []
 
@@ -17,21 +17,30 @@ class Menu:
 
     # --- FUNGSI BARU: STATUS SISTEM ---
     def _display_system_status(self):
-        """Mencetak baris status sistem: Host, Interface, MAC, dan Version"""
+        """Mencetak baris status sistem: Monitor Mode, Interface, MAC, dan Version"""
+        # 1. Ambil data interface
         iface = getattr(self.wifi, 'iface', "None") if self.wifi else "None"
         mac_addr = self.wifi.get_mac(iface) if self.wifi else "00:00:00:00:00:00"
         
-        try:
-            current_host = socket.gethostname()
-        except:
-            current_host = "Unknown"
+        # 2. Cek Status Monitor Mode
+        is_mon = self.wifi.get_mode_status(iface) if self.wifi else False
+        
+        # 3. Logika Tampilan Status (OFF = Merah + Blink)
+        if is_mon:
+            mon_status = f"{colors.G}ON{colors.NC}"
+        else:
+            # Menggunakan kode ANSI Blink (\033[5m)
+            BLINK = "\033[5m"
+            mon_status = f"{colors.R}{BLINK}OFF{colors.NC}"
 
+        # 4. Susun Baris Status
         status_line = (
-            f"  {colors.DG}Host:  {colors.W}[{current_host}]  "
+            f"  {colors.DG}Monitor Mode:  {mon_status}  "
             f"{colors.DG}│  Iface:  {colors.C}[{iface}]  "
             f"{colors.DG}│  MAC:  {colors.Y}{mac_addr}{colors.NC}  "
             f"{colors.DG}│  Ver: {colors.W}{self.version}{colors.NC}"
         )
+        
         print(status_line)
         colors.draw_line(colors.W)
 
@@ -58,9 +67,9 @@ class Menu:
         icon = [
             f"{colors.B}          _                      ", 
             f"{colors.B}    _    / \\         _   _       ", 
-            f"{colors.W}───/─\\──/───\\───_───/─\\─/─\\──────", 
-            f"{colors.B}  V   V      \\ / \\ V   V   V     ", 
-            f"{colors.B}              v                  ",
+            f"{colors.W}───{colors.B}/{colors.W}─{colors.B}\\{colors.W}──{colors.B}/{colors.W}───{colors.B}\\{colors.W}───{colors.B}_{colors.W}───{colors.B}/{colors.W}─{colors.B}\\{colors.W}─{colors.B}/{colors.W}─{colors.B}\\{colors.W}──────", 
+            f"{colors.B}  V   V      \\ / \\ /   V   V     ", 
+            f"{colors.B}              v   v             ",
             f"                                 ",
             f"                                 "
         ]
@@ -105,6 +114,7 @@ class Menu:
             return
 
         while True:
+            # Sync status interface terbaru
             system_iface = self.wifi.get_interface() 
             current_iface = getattr(self.wifi, 'iface', "None")
 
@@ -112,103 +122,104 @@ class Menu:
                 self.wifi.iface = system_iface
                 current_iface = system_iface
 
-            is_mon = self.wifi.get_mode_status(current_iface)
-            status_text = f"{colors.G}ON{colors.NC}" if is_mon else f"{colors.R}{colors.BOLD}OFF{colors.NC}"
-
-            # Panggil Header (Sekarang sudah mencakup status dan tabel)
+            # Tampilkan Header (MAC & Monitor status tetep kelihatan di atas meski menu dihapus)
             self.display_header()
-            
 
-            # --- UI MENU ---
-            print(f"  {colors.B}{colors.BOLD}[ SYSTEM & INTERFACE ]{colors.NC}           {colors.R}{colors.BOLD}[ ATTACK SUITE ]{colors.NC}")
-            print(f"  {colors.W}[01]{colors.NC} %-26s  {colors.W}[05]{colors.NC} %-25s" % ("Refresh Target/Intf", "DoS Attacks Menu"))
-            print(f"  {colors.W}[02]{colors.NC} Monitor Mode [{status_text}]          {colors.W}[06]{colors.NC} %-25s" % ("Handshake/PMKID Tools"))
-            print(f"  {colors.W}[03]{colors.NC} %-26s  {colors.W}[07]{colors.NC} %-25s" % ("Spoof MAC Address", "Offline Decrypt Menu"))
-            print(f"  {colors.W}[04]{colors.NC} %-26s  {colors.W}[08]{colors.NC} %-25s" % ("Sniffing ", "Evil Twin Attacks"))
-            print(f"\n  {colors.P}{colors.BOLD}[ ADVANCED ATTACKS ]{colors.NC}                {colors.G}{colors.BOLD}[ UTILITIES & EXIT ]{colors.NC}")
-            print(f"  {colors.W}[09]{colors.NC} %-26s  {colors.W}[00]{colors.NC} {colors.R}%-25s{colors.NC}" % ("WPS Attacks Menu", "Exit Script"))
-            colors.draw_line(colors.W)
+            # --- REKONSTRUKSI UI MENU (Lebih Padat) ---
+            # --- Bagian ATTACK SUITE ---
+            print(f"  {colors.B}{colors.BOLD}[ SCAN & RECON ]                 {colors.R}{colors.BOLD}[ ATTACK SUITE ]{colors.NC}")
+            print(f"  {colors.W}[01]{colors.NC} %-27s {colors.W}[04]{colors.NC} %-25s" % ("Scanner (Auto-Target)", "DoS Attacks Menu"))
+            print(f"  {colors.W}[02]{colors.NC} %-27s {colors.W}[05]{colors.NC} %-25s" % ("MITM & Sniffing", "Handshake & WPS Capture"))
+            print(f"  {colors.W}[03]{colors.NC} %-27s" % ("Evil Twin Attacks"))
             
+            # --- Bagian POST-EXPLOITATION ---
+            print(f"\n  {colors.P}{colors.BOLD}[ POST-EXPLOITATION ]            {colors.G}{colors.BOLD}[ UTILITIES & EXIT ]{colors.NC}")
+            print(f"  {colors.W}[06]{colors.NC} %-27s {colors.W}[08]{colors.NC} %-25s" % ("Offline Decrypt (Cracker)", "System Utilities"))
+            print(f"  {colors.W}[07]{colors.NC} %-27s {colors.W}[00]{colors.NC} {colors.R}%-25s{colors.NC}" % ("Network Analysis", "Exit Script"))
+            colors.draw_line(colors.W)
             
             try:
                 choice = input(f"  {colors.Q} {colors.BOLD}Select an option: {colors.NC}").strip()
 
+                # --- LOGIKA INPUT FLEKSIBEL (Handle 01, 1, dst) ---
                 if choice in ['0', '00']: 
+                    print(f"\n{colors.G}[!] Cleaning up and exiting...{colors.NC}")
+                    self.wifi.set_managed_mode(current_iface)
                     break
 
-                elif choice in ['01', '1']:
+                # Membersihkan angka 0 di depan untuk mempermudah elif
+                cmd = choice.lstrip('0')
+
+                # [01] SCANNER
+                if cmd == '1':
                     self.wifi.ui_select_interface()
                     current_iface = getattr(self.wifi, 'iface', "None")
-                    if current_iface and current_iface != "None":
+                    if current_iface != "None":
+                        # Di sini lo bisa tambahin self.wifi.ui_spoof_mac(current_iface) kalau mau silent spoof
                         self.wifi.launch_airodump(current_iface, colors.OK, colors.WARN)
                         self.targets = getattr(self.wifi, 'targets', [])
-                    else:
-                        print(f"\n{colors.ERR} Batal: Interface tidak dipilih.")
-                        time.sleep(1)
 
-                elif choice == '02':
+                # [02] MITM
+                elif cmd == '2':
                     if current_iface != "None":
-                        self.wifi.toggle_mode(current_iface)
+                        self.processor.launch_mitm_attack(current_iface, colors.OK, colors.WARN)
                     else:
-                        print(f"\n{colors.ERR} Select interface first!")
+                        print(f"\n{colors.ERR} Select interface first (01)!")
                         time.sleep(1)
 
-                elif choice in ['03', '3']:
-                    if not current_iface or current_iface == "None":
-                        print(f"\n{colors.ERR} Error: Pilih interface dulu (01)!")
-                        time.sleep(1.5)
-                    else:
-                        self.display_header()
-                        self.wifi.ui_spoof_mac(current_iface)
+                # [03] EVIL TWIN
+                elif cmd == '3':
+                    print(f"\n{colors.INFO} Evil Twin Module coming soon...")
+                    time.sleep(2)
 
-                elif choice == "04":
-                    if not current_iface or current_iface == "None":
-                        print(f"\n{colors.ERR} Error: Pilih interface dulu (01)!")
-                        time.sleep(1.5)
-                    elif "ON" not in status_text:
-                        print(f"\n{colors.ERR} Error: Monitor Mode harus ON!")
-                        time.sleep(1.5)
-                    elif not self.targets:
+                # [04] DOS ATTACKS (Pindahan dari 05 lama)
+                elif cmd == '4':
+                    if not self.targets:
                         print(f"\n{colors.WARN} Tabel Kosong! Jalankan Scan (01) dulu.")
                         time.sleep(2)
                     else:
-                        # Alur pemilihan target mirip Deauth
-                        try:
-                            print(f"\n{colors.Q} Select Target ID to Sniff (1-{len(self.targets)}):")
-                            val = input(f"  {colors.DG}Selection (Enter for ALL) > {colors.NC}").strip()
-                            
-                            if not val:
-                                # Jika user langsung enter, sniff semua
-                                self.wifi._packet_sniffing(None)
-                            else:
-                                target = self.targets[int(val) - 1]
-                                # Ambil bssid dan channel dari tabel
-                                bssid = target.get('bssid')
-                                channel = target.get('ch')
-                                
-                                # LOCK CHANNEL target agar trafik tertangkap
-                                os.system(f"iw dev {current_iface} set channel {channel}")
-                                
-                                # Jalankan sniffer dengan filter MAC
-                                self.wifi._packet_sniffing(bssid)
-                        except (ValueError, IndexError):
-                            print(f"{colors.ERR} Invalid Target ID.")
-                            time.sleep(1)
-                        
-                elif choice in ['05', '5']:
-                    if not current_iface or current_iface == "None":
-                        print(f"\n{colors.ERR} Error: Pilih interface dulu (01)!")
-                        time.sleep(1.5)
-                    elif not self.targets:
-                        print(f"\n{colors.WARN} Tabel Kosong! Jalankan Scan (01) dulu.")
-                        time.sleep(2)
-                    else:
-                        self.display_header()
-                # Memanggil konektor start_dos agar konsisten dengan modul lain
-                # Pastikan indentasi di bawah ini sejajar dengan baris di atasnya
+                        # Logic Auto-Monitor & Restore sudah ada di dalam start_dos
                         self.wifi.deauth.start_dos(self.targets)
 
+                # [05] HANDSHAKE/PMKID TOOLS
+                elif cmd == '5':
+                    # 1. Cek apakah interface sudah dipilih
+                    if not current_iface or current_iface == "None":
+                        print(f"\n{colors.ERR} Error: Pilih interface dulu (01)!")
+                        time.sleep(1.5)
+                    
+                    # 2. Cek apakah sudah ada hasil scan (target)
+                    elif not getattr(self, 'targets', []):
+                        print(f"\n{colors.WARN} Tabel Kosong! Jalankan Scan (01) dulu untuk cari target.")
+                        time.sleep(2)
+                    
+                    else:
+                        # Membersihkan layar sebelum masuk ke sub-menu handshake
+                        self.display_header()
+                        
+                        # Memanggil modul Handshake
+                        # Sesuai struktur: self.wifi.handshake (pastikan sudah di-inject di __init__)
+                        try:
+                            from wifipro.attacks.handshake import HandshakeCapture
+                            attacker = HandshakeCapture(self.wifi, colors)
+                            attacker.start_capture(self.targets)
+                        except Exception as e:
+                            print(f"\n{colors.ERR} Gagal memuat Modul Handshake: {e}")
+                            time.sleep(2)
+
+                # [09] UTILITIES
+                elif cmd == '9':
+                    new_host = input(f"\n{colors.Q} Enter new hostname: ")
+                    self.wifi.change_hostname(new_host)
+
             except KeyboardInterrupt:
+                # Cek status terakhir sebelum exit
+                if self.wifi.get_mode_status(current_iface):
+                    print(f"\n{colors.G}[!] Monitor Mode detected. Restoring system...{colors.NC}")
+                    self.wifi.set_managed_mode(current_iface)
+                else:
+                    print(f"\n{colors.OK} {colors.G}System already clean. Exiting...{colors.NC}")
+                
                 break
             except Exception as e:
                 print(f"\n{colors.ERR} Error: {e}")

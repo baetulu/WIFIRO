@@ -1,5 +1,5 @@
 import subprocess
-import os
+import os, time, sys
 from wifipro.utils.terminal import colors
 from wifipro.core.scanner import WiFiScanner # Import class baru
 from wifipro.attacks.deauth import DeauthAttack # Import modul attack
@@ -16,18 +16,12 @@ class WirelessManager:
         from wifipro.attacks.deauth import DeauthAttack
         self.deauth = DeauthAttack(self, self.colors)
         
-        # Inisialisasi modul-modul dengan memberikan akses ke 'self' (manager)
-        # dan objek 'colors' agar UI di dalam modul tetap cantik.
+        from wifipro.core.scanner import WiFiScanner
+        from wifipro.attacks.deauth import DeauthAttack
+        
         self.scanner = WiFiScanner(self)
         self.deauth = DeauthAttack(self, self.colors)
         
-    def start_dos(self, targets):
-        """
-    Konektor dari Menu Utama ke Modul Deauth
-        """
-    # Tetap memanggil ui_dos_menu agar konsisten dengan gaya fungsi lainnya
-        self.deauth.ui_dos_menu(targets)
-    
     def launch_airodump(self, interface, ok, warn):
         # Delegate (serahkan) tugas ke class scanner
         self.targets = self.scanner.launch_airodump(interface, ok, warn)
@@ -36,6 +30,24 @@ class WirelessManager:
         """Memanggil mesin serangan Deauth"""
         self.deauth.ui_dos_menu(targets)    
     
+    def launch_mitm_attack(self, interface, ok, warn):
+        """
+        Jembatan untuk menjalankan serangan MITM
+        """
+        try:
+            # Gunakan import di dalam fungsi (Lazy Import)
+            from wifipro.attacks.mitm import PhantomMitmUltimate
+            
+            attacker = PhantomMitmUltimate()
+            attacker.run(interface) 
+            
+        except ImportError as e:
+            print(f"\n{warn} Error: Module MITM tidak ditemukan!")
+            print(f"{warn} Log: {e}")
+            time.sleep(2)
+        except Exception as e:
+            print(f"\n{warn} Terjadi kesalahan sistem: {e}")
+            time.sleep(2)
     def get_interface(self):
         """Mendapatkan interface wireless aktif"""
         try:
@@ -99,58 +111,7 @@ class WirelessManager:
             print(f"{colors.ERR} {colors.R}Failed! Make sure 'macchanger' is installed.{colors.NC}")
         
         input(f"\n{colors.INFO} Press Enter to return...")
-  
-    def _packet_sniffing(self, target_mac=None):
-        """WiFi Pro - Targeted Sniffing Logic (Upgraded with Real-time Counter)"""
-        from scapy.all import sniff, IP, Dot11, TCP, UDP
-        import os, time, sys
-        
-        iface = self.iface
-        os.system('clear')
-        
-        # Inisialisasi counter
-        self.sniffed_count = 0
-        c = colors
-        
-        # Header
-        t_info = target_mac if target_mac else "BROADCAST / ALL"
-        print(f"\n  {c.BOLD}{c.W}MODULE:{c.NC} {c.C}PHANTOM_SNIFFER{c.NC}")
-        print(f"  {c.BOLD}{c.W}TARGET:{c.NC} {c.Y}{t_info}{c.NC}")
-        print(f"  {c.INFO} {c.R}Press CTRL+C to Stop Sniffing{c.NC}")
-        print(f"  {c.DG}" + "─"*55 + f"{c.NC}")
-        print(f"  {'%-18s' % 'SOURCE'} | {'%-18s' % 'DESTINATION'} | {'%-8s' % 'PROTO'}")
-        print(f"  {c.DG}" + "─"*55 + f"{c.NC}")
-
-        def packet_callback(pkt):
-            if target_mac:
-                addrs = [pkt.addr1, pkt.addr2, pkt.addr3]
-                if target_mac.lower() not in [str(a).lower() for a in addrs if a]:
-                    return
-
-            if pkt.haslayer(IP):
-                self.sniffed_count += 1
-                src = pkt[IP].src
-                dst = pkt[IP].dst
-                proto = "TCP" if pkt.haslayer(TCP) else "UDP" if pkt.haslayer(UDP) else "IP"
-                
-                # Cetak baris data
-                print(f"  {c.G}%-18s{c.NC} | %-18s | %-8s" % (src, dst, proto))
-                
-                # Tampilkan Counter Real-time di baris bawah (Status Bar)
-                sys.stdout.write(f"\r  {c.W}[{c.Y}Data Terkumpul: {self.sniffed_count}{c.W}]{c.NC}")
-                sys.stdout.flush()
-
-        try:
-            sniff(iface=iface, prn=packet_callback, store=0)
-        except KeyboardInterrupt:
-            # Tampilan Laporan Akhir
-            print(f"\n\n  {c.DG}" + "─"*55 + f"{c.NC}")
-            print(f"  {c.OK} {c.G}Sniffing Stopped Manually.{c.NC}")
-            print(f"  {c.INFO} {c.W}Total Data Terkumpul: {c.Y}{self.sniffed_count} {c.W}Paket IP{c.NC}")
-            print(f"  {c.DG}" + "─"*55 + f"{c.NC}")
-            
-            # Menunggu instruksi Enter
-            input(f"  {c.Q} Press {c.W}[Enter]{c.NC} to return to main menu...") maksudnyya disini callback di panggil dimana
+        return
                 
     def ui_select_interface(self):
         """WiFi Pro - Auto-selection Logic"""
@@ -240,6 +201,12 @@ class WirelessManager:
         
         return False
 
+    def launch_handshake_capture(self, targets):
+        """Jembatan menuju modul Handshake"""
+        from wifipro.attacks.handshake import HandshakeCapture
+        attacker = HandshakeCapture(self, self.colors)
+        attacker.start_capture(targets)
+        
     def set_managed_mode(self, iface):
         """Mengubah interface ke Managed Mode (Normal) & Restore Jaringan"""
         print(f"{colors.INFO} Reverting {colors.C}{iface}{colors.NC} to {colors.Y}Managed Mode{colors.NC}...")
