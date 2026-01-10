@@ -1,9 +1,11 @@
 import subprocess
 import os, time, sys
+import shutil # Ditambahkan karena digunakan di cleanup_captures
 from wifipro.utils.terminal import colors
-from wifipro.core.scanner import WiFiScanner # Import class baru
-from wifipro.attacks.deauth import DeauthAttack # Import modul attack
+from wifipro.core.scanner import WiFiScanner
+from wifipro.attacks.deauth import DeauthAttack
 from scapy.all import sniff, IP, TCP, UDP, DNS
+
 class WirelessManager:
     
     def __init__(self, colors):
@@ -13,23 +15,43 @@ class WirelessManager:
         self.colors = colors
         self.iface = "None"
         self.targets = []
-        from wifipro.attacks.deauth import DeauthAttack
-        self.deauth = DeauthAttack(self, self.colors)
         
-        from wifipro.core.scanner import WiFiScanner
+        # Lazy import tetap dipertahankan sesuai kode asli
         from wifipro.attacks.deauth import DeauthAttack
+        from wifipro.core.scanner import WiFiScanner
         
         self.scanner = WiFiScanner(self)
         self.deauth = DeauthAttack(self, self.colors)
-        
-    def launch_airodump(self, interface, ok, warn):
-        # Delegate (serahkan) tugas ke class scanner
-        self.targets = self.scanner.launch_airodump(interface, ok, warn)
-        
-    def start_dos(self, targets):
-        """Memanggil mesin serangan Deauth"""
-        self.deauth.ui_dos_menu(targets)    
+          
+    def cleanup_captures(self):
+        """
+        Menghapus semua isi dari folder captures tanpa menghapus foldernya.
+        """
+        folder_path = 'captures'
     
+        if not os.path.exists(folder_path):
+            print(f"[-] Folder {folder_path} tidak ditemukan.")
+            return
+
+        print(f"[*] Membersihkan folder {folder_path}...")
+    
+        count = 0
+        for filename in os.listdir(folder_path):
+            file_path = os.path.join(folder_path, filename)
+            try:
+                # Cek jika itu file atau link, lalu hapus
+                if os.path.isfile(file_path) or os.path.islink(file_path):
+                    os.unlink(file_path)
+                    count += 1
+                # Jika ada sub-folder di dalam captures
+                elif os.path.isdir(file_path):
+                    shutil.rmtree(file_path)
+                    count += 1
+            except Exception as e:
+                print(f"[-] Gagal menghapus {file_path}. Alasan: {e}")
+
+        print(f"[+] Berhasil menghapus {count} file/folder di dalam captures.")
+
     def launch_mitm_attack(self, interface, ok, warn):
         """
         Jembatan untuk menjalankan serangan MITM
@@ -48,6 +70,7 @@ class WirelessManager:
         except Exception as e:
             print(f"\n{warn} Terjadi kesalahan sistem: {e}")
             time.sleep(2)
+
     def get_interface(self):
         """Mendapatkan interface wireless aktif"""
         try:
@@ -57,6 +80,11 @@ class WirelessManager:
         except:
             return "None"
 
+    def set_ip_forward(self, status):
+        # 0 = NetCut (Mati), 1 = MITM (Nyala)
+        val = "1" if status else "0"
+        os.system(f"echo {val} > /proc/sys/net/ipv4/ip_forward")
+                
     def get_mac(self, iface):
         """Mendapatkan MAC Address interface"""
         if iface == "None": return "00:00:00:00:00:00"
@@ -65,6 +93,7 @@ class WirelessManager:
                 return f.read().strip().upper()
         except:
             return "00:00:00:00:00:00"
+
     def _run_cmd(self, command):
         """Helper untuk menjalankan perintah sistem"""
         try:
@@ -86,16 +115,17 @@ class WirelessManager:
         if "type monitor" in check.stdout:
             return True
         return False
+
     def ui_spoof_mac(self, iface):
         """Logika Spoofing MAC Address (Random)"""
         import time
-        print(f"\n{colors.INFO} Preparing {colors.C}{iface}{colors.NC} for MAC Spoofing...")
+        print(f"\n{self.colors.INFO} Preparing {self.colors.C}{iface}{self.colors.NC} for MAC Spoofing...")
         
         # 1. Matikan Interface (Wajib agar MAC bisa diganti)
         self._run_cmd(f"ip link set {iface} down")
         
         # 2. Jalankan macchanger
-        print(f"{colors.INFO} Generating random MAC address...")
+        print(f"{self.colors.INFO} Generating random MAC address...")
         res = self._run_cmd(f"macchanger -r {iface}")
         
         # 3. Nyalakan kembali
@@ -104,13 +134,13 @@ class WirelessManager:
         if res.returncode == 0:
             # Ambil baris baru dari output macchanger untuk konfirmasi
             new_mac = [line for line in res.stdout.split('\n') if "New MAC" in line]
-            print(f"{colors.OK} {colors.G}Success!{colors.NC}")
+            print(f"{self.colors.OK} {self.colors.G}Success!{self.colors.NC}")
             if new_mac:
-                print(f"    {colors.DG}{new_mac[0]}{colors.NC}")
+                print(f"    {self.colors.DG}{new_mac[0]}{self.colors.NC}")
         else:
-            print(f"{colors.ERR} {colors.R}Failed! Make sure 'macchanger' is installed.{colors.NC}")
+            print(f"{self.colors.ERR} {self.colors.R}Failed! Make sure 'macchanger' is installed.{self.colors.NC}")
         
-        input(f"\n{colors.INFO} Press Enter to return...")
+        input(f"\n{self.colors.INFO} Press Enter to return...")
         return
                 
     def ui_select_interface(self):
@@ -119,47 +149,33 @@ class WirelessManager:
         interfaces = self.get_all_interfaces()
         
         if not interfaces:
-            print(f"  {colors.ERR} No wireless card found!")
+            print(f"  {self.colors.ERR} No wireless card found!")
             time.sleep(1.5)
             return
 
         # --- LOGIKA AUTO-SELECT (Anti Kesel) ---
         if len(interfaces) == 1:
             self.iface = interfaces[0]
-            print(f"  {colors.OK} Only one interface found. {colors.G}Auto-selecting: {colors.Y}{self.iface}{colors.NC}")
-            time.sleep(1) # Beri jeda sebentar biar user sempat baca
-            return # Langsung keluar, lanjut ke menu berikutnya
+            print(f"  {self.colors.OK} Only one interface found. {self.colors.G}Auto-selecting: {self.colors.Y}{self.iface}{self.colors.NC}")
+            time.sleep(1) 
+            return 
 
         # --- Jika lebih dari 1, baru tampilkan daftar ---
-        print(f"  {colors.B}{colors.BOLD}[ AVAILABLE INTERFACES ]{colors.NC}\n")
+        print(f"  {self.colors.B}{self.colors.BOLD}[ AVAILABLE INTERFACES ]{self.colors.NC}\n")
         for i, name in enumerate(interfaces, 1):
-            print(f"  {colors.W}[{i}]{colors.NC} {colors.C}{name}{colors.NC}")
+            print(f"  {self.colors.W}[{i}]{self.colors.NC} {self.colors.C}{name}{self.colors.NC}")
         
         try:
-            sel = input(f"\n  {colors.Q} Choice (1-{len(interfaces)}): ").strip()
+            sel = input(f"\n  {self.colors.Q} Choice (1-{len(interfaces)}): ").strip()
             if sel and sel != '0':
                 idx = int(sel) - 1
                 if 0 <= idx < len(interfaces):
                     self.iface = interfaces[idx]
-                    print(f"\n  {colors.OK} Target set to: {colors.G}{self.iface}{colors.NC}")
+                    print(f"\n  {self.colors.OK} Target set to: {self.colors.G}{self.iface}{self.colors.NC}")
                     time.sleep(1)
         except:
-            print(f"\n  {colors.ERR} Invalid selection!")
+            print(f"\n  {self.colors.ERR} Invalid selection!")
             time.sleep(1)
-    def change_hostname(self, new_name):
-        """Mengubah hostname sistem secara instan"""
-        import time
-        try:
-            # Ganti untuk sesi saat ini
-            self._run_cmd(f"hostname {new_name}")
-            # Ganti secara permanen di systemd
-            self._run_cmd(f"hostnamectl set-hostname {new_name}")
-            
-            print(f"\n  {colors.OK} Hostname identity changed to: {colors.W}{new_name}{colors.NC}")
-        except Exception as e:
-            print(f"\n  {colors.ERR} Failed to change hostname: {e}")
-        
-        time.sleep(1.5)
                 
     def toggle_mode(self, iface):
         """
@@ -170,13 +186,9 @@ class WirelessManager:
         else:
             return self.set_monitor_mode(iface)
                    
-    
-    
-    
-        
     def set_monitor_mode(self, iface):
         """Versi Upgrade: Silent Killer + Monitor Mode + Auto Unblock"""
-        # 1. Silent Killer: Matikan proses pengganggu tanpa banyak tanya
+        # 1. Silent Killer
         self._run_cmd("airmon-ng check kill > /dev/null 2>&1")
         
         # 2. Pastikan tidak ada blokir software (RF-KILL)
@@ -195,78 +207,68 @@ class WirelessManager:
         for dev in interfaces:
             check = self._run_cmd(f"iw dev {dev} info")
             if "type monitor" in check.stdout:
-                # Update variabel global engine ke nama dev baru (misal wlan0 -> wlan0mon)
                 self.iface = dev 
                 return True
         
         return False
 
-    def launch_handshake_capture(self, targets):
-        """Jembatan menuju modul Handshake"""
-        from wifipro.attacks.handshake import HandshakeCapture
-        attacker = HandshakeCapture(self, self.colors)
-        attacker.start_capture(targets)
-        
     def set_managed_mode(self, iface):
         """Mengubah interface ke Managed Mode (Normal) & Restore Jaringan"""
-        print(f"{colors.INFO} Reverting {colors.C}{iface}{colors.NC} to {colors.Y}Managed Mode{colors.NC}...")
+        print(f"{self.colors.INFO} Reverting {self.colors.C}{iface}{self.colors.NC} to {self.colors.Y}Managed Mode{self.colors.NC}...")
         
         # 1. Deteksi dan matikan mode monitor via airmon-ng jika perlu
-        # Kita hapus spasi atau info tambahan jika ada (seperti 'wlan0 [MON]')
         clean_iface = iface.split()[0]
         
         if "mon" in clean_iface:
-            print(f"{colors.INFO} Stopping airmon-ng on {colors.C}{clean_iface}{colors.NC}...")
+            print(f"{self.colors.INFO} Stopping airmon-ng on {self.colors.C}{clean_iface}{self.colors.NC}...")
             self._run_cmd(f"airmon-ng stop {clean_iface}")
-            # Setelah stop, kita cari nama interface aslinya lagi
+            # Cari nama interface asli
             res = self._run_cmd("iw dev | awk '/Interface/ {print $2}'")
             ifres = res.stdout.strip().split('\n')
             clean_iface = ifres[0] if ifres[0] else clean_iface.replace("mon", "")
 
         # 2. Reset interface secara hardware
-        print(f"{colors.INFO} Resetting interface state...")
+        print(f"{self.colors.INFO} Resetting interface state...")
         self._run_cmd(f"ip link set {clean_iface} down")
         self._run_cmd(f"iw dev {clean_iface} set type managed")
         self._run_cmd(f"ip link set {clean_iface} up")
         
-        # 3. UNBLOCK RFKILL (Mencegah hardware disabled)
+        # 3. UNBLOCK RFKILL
         self._run_cmd(f"rfkill unblock wifi")
         
-        # 4. RESTORE SERVICES (NetworkManager harus hidup kembali)
-        print(f"{colors.INFO} Restarting NetworkManager...")
-        # Kita jalankan keduanya untuk memastikan kompatibilitas berbagai versi Kali
+        # 4. RESTORE SERVICES
+        print(f"{self.colors.INFO} Restarting NetworkManager...")
         self._run_cmd("systemctl restart NetworkManager")
         self._run_cmd("nmcli networking on")
         
         # Verifikasi akhir
         check = self._run_cmd(f"iw dev {clean_iface} info")
         if "type managed" in check.stdout:
-            print(f"{colors.OK} Interface {colors.G}{clean_iface}{colors.NC} is now {colors.G}ONLINE{colors.NC}.")
+            print(f"{self.colors.OK} Interface {self.colors.G}{clean_iface}{self.colors.NC} is now {self.colors.G}ONLINE{self.colors.NC}.")
             return True
         else:
-            # Jika masih gagal, coba paksa up sekali lagi
             self._run_cmd(f"ifconfig {clean_iface} up")
-            print(f"{colors.ERR} {colors.R}Failed to restore Managed Mode completely.{colors.NC}")
+            print(f"{self.colors.ERR} {self.colors.R}Failed to restore Managed Mode completely.{self.colors.NC}")
             return False
             
     def change_mac(self, iface):
         """Spoofing MAC Address menggunakan macchanger"""
-        print(f"{colors.INFO} Randomizing MAC Address for {colors.C}{iface}{colors.NC}...")
+        print(f"{self.colors.INFO} Randomizing MAC Address for {self.colors.C}{iface}{self.colors.NC}...")
         
         self._run_cmd(f"ip link set {iface} down")
         res = self._run_cmd(f"macchanger -r {iface}")
         self._run_cmd(f"ip link set {iface} up")
         
         if res.returncode == 0:
-            print(f"{colors.OK} {colors.G}MAC Address changed successfully!{colors.NC}")
+            print(f"{self.colors.OK} {self.colors.G}MAC Address changed successfully!{self.colors.NC}")
         else:
-            print(f"{colors.ERR} {colors.R}MAC Spoofing failed. Is macchanger installed?{colors.NC}")
+            print(f"{self.colors.ERR} {self.colors.R}MAC Spoofing failed. Is macchanger installed?{self.colors.NC}")
 
     def kill_conflicting(self):
-        """Menghilangkan proses yang mengganggu (seperti airmon-ng check kill)"""
-        print(f"{colors.INFO} Killing conflicting processes (NetworkManager/wpa_supplicant)...")
+        """Menghilangkan proses yang mengganggu"""
+        print(f"{self.colors.INFO} Killing conflicting processes (NetworkConfig/wpa_supplicant)...")
         self._run_cmd("airmon-ng check kill")
-        print(f"{colors.OK} {colors.G}Processes killed.{colors.NC}")
+        print(f"{self.colors.OK} {self.colors.G}Processes killed.{self.colors.NC}")
 
     def get_all_interfaces(self):
         """Mendapatkan daftar semua interface wireless"""

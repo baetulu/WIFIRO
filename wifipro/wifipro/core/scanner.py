@@ -4,26 +4,26 @@ import csv
 import subprocess
 
 class WiFiScanner:
-    def __init__(self, manager):
+    def __init__(self, config):
         """
         Menerima instance WirelessManager (self dari process.py) 
         agar bisa memanggil fungsi monitor mode.
         """
-        self.manager = manager
+        self.config = config
         self.output_file = "/tmp/wifipro_scan"
         self.csv_path = f"{self.output_file}-01.csv"
 
     def launch_airodump(self, interface, ok_simbol, warn_simbol):
         """Master Scan: Mengambil data lengkap untuk Dashboard & Menu Lain"""
         try:
-            # 1. Cek & Auto-Switch Monitor Mode via Manager
-            is_monitor = self.manager.get_mode_status(interface)
+            # 1. Cek & Auto-Switch Monitor Mode via Config
+            is_monitor = self.config.get_mode_status(interface)
             if not is_monitor:
                 print(f"  {ok_simbol} Mengaktifkan mode monitor otomatis...")
-                self.manager.toggle_mode(interface)
+                self.config.toggle_mode(interface)
                 time.sleep(2)
                 # Ambil interface terbaru (mungkin berubah nama setelah airmon-ng)
-                interface = getattr(self.manager, 'iface', interface)
+                interface = getattr(self.config, 'iface', interface)
 
             # Bersihkan file sampah scan sebelumnya
             os.system(f"rm -f {self.output_file}*")
